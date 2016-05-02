@@ -26,7 +26,8 @@ var (
 
 func (*SimpleHubSuite) TestPublishNoSubscribers(c *gc.C) {
 	hub := pubsub.NewSimpleHub()
-	result := hub.Publish("testing", nil)
+	result, err := hub.Publish("testing", nil)
+	c.Assert(err, jc.ErrorIsNil)
 
 	select {
 	case <-result.Complete():
@@ -43,7 +44,8 @@ func (*SimpleHubSuite) TestPublishOneSubscriber(c *gc.C) {
 		c.Check(data, gc.IsNil)
 		called = true
 	})
-	result := hub.Publish("testing", nil)
+	result, err := hub.Publish("testing", nil)
+	c.Assert(err, jc.ErrorIsNil)
 
 	select {
 	case <-result.Complete():
@@ -59,7 +61,8 @@ func (*SimpleHubSuite) TestPublishCompleterWaits(c *gc.C) {
 	hub.Subscribe("testing", func(topic string, data interface{}) {
 		<-wait
 	})
-	result := hub.Publish("testing", nil)
+	result, err := hub.Publish("testing", nil)
+	c.Assert(err, jc.ErrorIsNil)
 
 	select {
 	case <-result.Complete():
@@ -99,7 +102,8 @@ func (*SimpleHubSuite) TestSubscriberRegex(c *gc.C) {
 	hub.Subscribe("test.*", callback)
 	hub.Subscribe("tes.ing", callback)
 
-	result := hub.Publish("testing", nil)
+	result, err := hub.Publish("testing", nil)
+	c.Assert(err, jc.ErrorIsNil)
 
 	select {
 	case <-result.Complete():
@@ -112,12 +116,13 @@ func (*SimpleHubSuite) TestSubscriberRegex(c *gc.C) {
 func (*SimpleHubSuite) TestUnsubscribe(c *gc.C) {
 	var called bool
 	hub := pubsub.NewSimpleHub()
-	result, err := hub.Subscribe("testing", func(topic string, data interface{}) {
+	sub, err := hub.Subscribe("testing", func(topic string, data interface{}) {
 		called = true
 	})
 	c.Assert(err, jc.ErrorIsNil)
-	result.Unsubscribe()
-	result := hub.Publish("testing", nil)
+	sub.Unsubscribe()
+	result, err := hub.Publish("testing", nil)
+	c.Assert(err, jc.ErrorIsNil)
 
 	select {
 	case <-result.Complete():

@@ -9,7 +9,7 @@ type SimpleHub interface {
 
 	// Publish will notifiy all the subscribers that are interested by calling
 	// their handler function.
-	Publish(topic string, data interface{}) Completer
+	Publish(topic string, data interface{}) (Completer, error)
 
 	// Subscribe takes a topic regular expression, and a handler function.
 	// If the topicRegex is not a valid regular expression, and error is returned.
@@ -27,9 +27,4 @@ type Completer interface {
 // Unsubscriber provides a simple way to Unsubscribe.
 type Unsubscriber interface {
 	Unsubscribe()
-}
-
-// NewSimpleHub returns a new empty SimpleHub instance.
-func NewSimpleHub() SimpleHub {
-	return &simplehub{}
 }

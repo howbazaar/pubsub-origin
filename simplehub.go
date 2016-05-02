@@ -11,12 +11,23 @@ import (
 	"github.com/juju/loggo"
 )
 
-var logger = loggo.GetLogger("pubsub")
+// NewSimpleHub returns a new Hub instance.
+//
+// A simple hub does not touch the data that is passed through to Publish.
+// This data is passed through to each Subscriber. Note that all subscribers
+// are notified in parallel, and that no modification should be done to the
+// data or data races will occur.
+func NewSimpleHub() SimpleHub {
+	return &simplehub{
+		logger: loggo.GetLogger("pubsub.simple"),
+	}
+}
 
 type simplehub struct {
 	mutex       sync.Mutex
 	subscribers []*subscriber
 	idx         int
+	logger      loggo.Logger
 }
 
 type subscriber struct {
@@ -47,7 +58,7 @@ func (s *subscriber) matchTopic(topic string) bool {
 	return s.topic.MatchString(topic)
 }
 
-func (h *simplehub) Publish(topic string, data interface{}) Completer {
+func (h *simplehub) Publish(topic string, data interface{}) (Completer, error) {
 	done := make(chan struct{})
 	subs := h.dupeSubscribers()
 	wait := sync.WaitGroup{}
@@ -55,7 +66,6 @@ func (h *simplehub) Publish(topic string, data interface{}) Completer {
 	go func() {
 		for _, s := range subs {
 			if s.matchTopic(topic) {
-				logger.Debugf("calling handler")
 				wait.Add(1)
 				go func() {
 					defer wait.Done()
@@ -67,7 +77,7 @@ func (h *simplehub) Publish(topic string, data interface{}) Completer {
 		close(done)
 	}()
 
-	return &doneHandle{done: done}
+	return &doneHandle{done: done}, nil
 }
 
 func (h *simplehub) Subscribe(topic string, handler func(topic string, data interface{})) (Unsubscriber, error) {
