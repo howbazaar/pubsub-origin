@@ -4,6 +4,7 @@
 package pubsub
 
 import (
+	"reflect"
 	"regexp"
 	"sync"
 
@@ -80,7 +81,7 @@ func (h *simplehub) Publish(topic string, data interface{}) (Completer, error) {
 	return &doneHandle{done: done}, nil
 }
 
-func (h *simplehub) Subscribe(topic string, handler func(topic string, data interface{})) (Unsubscriber, error) {
+func (h *simplehub) Subscribe(topic string, handler interface{}) (Unsubscriber, error) {
 	h.mutex.Lock()
 	defer h.mutex.Unlock()
 
@@ -91,16 +92,38 @@ func (h *simplehub) Subscribe(topic string, handler func(topic string, data inte
 	if handler == nil {
 		return nil, errors.NotValidf("missing handler")
 	}
+	f, err := h.checkHandler(handler)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
 
 	id := h.idx
 	h.idx++
 	h.subscribers = append(h.subscribers, &subscriber{
 		id:      id,
 		topic:   matcher,
-		handler: handler,
+		handler: f,
 	})
 
 	return &handle{hub: h, id: id}, nil
+}
+
+func (h *simplehub) checkHandler(handler interface{}) (func(string, interface{}), error) {
+	t := reflect.TypeOf(handler)
+	if t.Kind() != reflect.Func {
+		return nil, errors.NotValidf("handler of type %T", handler)
+	}
+	var result func(string, interface{})
+	rt := reflect.TypeOf(result)
+	if !t.AssignableTo(rt) {
+		return nil, errors.NotValidf("incorrect handler signature")
+	}
+	f, ok := handler.(func(string, interface{}))
+	if !ok {
+		// This shouldn't happen due to the assignable check just above.
+		return nil, errors.NotValidf("incorrect handler signature")
+	}
+	return f, nil
 }
 
 func (h *simplehub) unsubscribe(id int) {

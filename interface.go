@@ -13,7 +13,7 @@ type Hub interface {
 
 	// Subscribe takes a topic regular expression, and a handler function.
 	// If the topicRegex is not a valid regular expression, and error is returned.
-	Subscribe(topicRegex string, handler func(topic string, data interface{})) (Unsubscriber, error)
+	Subscribe(topicRegex string, handler interface{}) (Unsubscriber, error)
 }
 
 // Completer provides a way for the caller of publish to know when all of the
