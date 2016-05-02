@@ -17,7 +17,7 @@ import (
 // This data is passed through to each Subscriber. Note that all subscribers
 // are notified in parallel, and that no modification should be done to the
 // data or data races will occur.
-func NewSimpleHub() SimpleHub {
+func NewSimpleHub() Hub {
 	return &simplehub{
 		logger: loggo.GetLogger("pubsub.simple"),
 	}

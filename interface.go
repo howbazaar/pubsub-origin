@@ -3,9 +3,9 @@
 
 package pubsub
 
-// SimpleHub represents an in-process delivery mechanism. The hub maintains a
-// list of topic subscribers. The data is passed through untouched.
-type SimpleHub interface {
+// Hub represents an in-process delivery mechanism. The hub maintains a
+// list of topic subscribers.
+type Hub interface {
 
 	// Publish will notifiy all the subscribers that are interested by calling
 	// their handler function.
