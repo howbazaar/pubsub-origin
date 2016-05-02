@@ -39,13 +39,11 @@ func (h *simplehub) dupeSubscribers() []*subscriber {
 	defer h.mutex.Unlock()
 
 	dupe := make([]*subscriber, len(h.subscribers))
-	count := copy(dupe, h.subscribers)
-	logger.Debugf("duplicated %d subscribers", count)
+	copy(dupe, h.subscribers)
 	return dupe
 }
 
 func (s *subscriber) matchTopic(topic string) bool {
-	logger.Debugf("matchTopic: %s, %s", s.topic.String(), topic)
 	return s.topic.MatchString(topic)
 }
 
@@ -76,14 +74,16 @@ func (h *simplehub) Subscribe(topic string, handler func(topic string, data inte
 	h.mutex.Lock()
 	defer h.mutex.Unlock()
 
-	id := h.idx
-	h.idx++
-
 	matcher, err := regexp.Compile(topic)
 	if err != nil {
 		return nil, errors.Annotate(err, "topic should be a regex string")
 	}
+	if handler == nil {
+		return nil, errors.NotValidf("missing handler")
+	}
 
+	id := h.idx
+	h.idx++
 	h.subscribers = append(h.subscribers, &subscriber{
 		id:      id,
 		topic:   matcher,
