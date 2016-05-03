@@ -35,6 +35,10 @@ type MessageID struct {
 	Key     int    `json:"id"`
 }
 
+type BadID struct {
+	ID string `json:"id"`
+}
+
 func (*StructuredHubSuite) TestPublishDeserialize(c *gc.C) {
 	source := Emitter{
 		Origin:  "test",
@@ -125,4 +129,30 @@ func (*StructuredHubSuite) TestPublishMap(c *gc.C) {
 	}
 	// Make sure they were all called.
 	c.Assert(count, gc.Equals, int32(3))
+}
+
+func (*StructuredHubSuite) TestPublishDeserializeError(c *gc.C) {
+	source := Emitter{
+		Origin:  "test",
+		Message: "hello world",
+		ID:      42,
+	}
+	count := int32(0)
+	hub := pubsub.NewStructuredHub(nil)
+	_, err := hub.Subscribe("testing", func(topic string, data BadID, err error) {
+		c.Check(err.Error(), gc.Equals, "json unmarshalling: json: cannot unmarshal number into Go value of type string")
+		c.Check(topic, gc.Equals, "testing")
+		c.Check(data.ID, gc.Equals, "")
+		atomic.AddInt32(&count, 1)
+	})
+	c.Assert(err, jc.ErrorIsNil)
+	result, err := hub.Publish("testing", source)
+	c.Assert(err, jc.ErrorIsNil)
+
+	select {
+	case <-result.Complete():
+	case <-time.After(veryShortTime):
+		c.Fatal("publish did not complete")
+	}
+	c.Assert(count, gc.Equals, int32(1))
 }
