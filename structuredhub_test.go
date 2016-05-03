@@ -42,18 +42,22 @@ func (*StructuredHubSuite) TestPublishDeserialize(c *gc.C) {
 		ID:      42,
 	}
 	count := int32(0)
-	hub := pubsub.NewStructuredHub()
-	hub.Subscribe("testing", func(topic string, data JustOrigin) {
+	hub := pubsub.NewStructuredHub(nil)
+	_, err := hub.Subscribe("testing", func(topic string, data JustOrigin, err error) {
+		c.Check(err, jc.ErrorIsNil)
 		c.Check(topic, gc.Equals, "testing")
 		c.Check(data.Origin, gc.Equals, source.Origin)
 		atomic.AddInt32(&count, 1)
 	})
-	hub.Subscribe("testing", func(topic string, data MessageID) {
+	c.Assert(err, jc.ErrorIsNil)
+	_, err = hub.Subscribe("testing", func(topic string, data MessageID, err error) {
+		c.Check(err, jc.ErrorIsNil)
 		c.Check(topic, gc.Equals, "testing")
 		c.Check(data.Message, gc.Equals, source.Message)
 		c.Check(data.ID, gc.Equals, source.ID)
 		atomic.AddInt32(&count, 1)
 	})
+	c.Assert(err, jc.ErrorIsNil)
 	result, err := hub.Publish("testing", source)
 	c.Assert(err, jc.ErrorIsNil)
 

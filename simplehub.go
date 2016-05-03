@@ -4,8 +4,6 @@
 package pubsub
 
 import (
-	"reflect"
-	"regexp"
 	"sync"
 
 	"github.com/juju/errors"
@@ -31,13 +29,6 @@ type simplehub struct {
 	logger      loggo.Logger
 }
 
-type subscriber struct {
-	id int
-
-	topic   *regexp.Regexp
-	handler func(topic string, data interface{})
-}
-
 type doneHandle struct {
 	done chan struct{}
 }
@@ -60,20 +51,23 @@ func (s *subscriber) matchTopic(topic string) bool {
 }
 
 func (h *simplehub) Publish(topic string, data interface{}) (Completer, error) {
+	h.mutex.Lock()
+	defer h.mutex.Unlock()
+
 	done := make(chan struct{})
-	subs := h.dupeSubscribers()
 	wait := sync.WaitGroup{}
 
-	go func() {
-		for _, s := range subs {
-			if s.matchTopic(topic) {
-				wait.Add(1)
-				go func() {
-					defer wait.Done()
-					s.handler(topic, data)
-				}()
-			}
+	for _, s := range h.subscribers {
+		if s.matchTopic(topic) {
+			wait.Add(1)
+			s.notify(func() {
+				defer wait.Done()
+				s.handler(topic, data)
+			})
 		}
+	}
+
+	go func() {
 		wait.Wait()
 		close(done)
 	}()
@@ -85,45 +79,15 @@ func (h *simplehub) Subscribe(topic string, handler interface{}) (Unsubscriber, 
 	h.mutex.Lock()
 	defer h.mutex.Unlock()
 
-	matcher, err := regexp.Compile(topic)
-	if err != nil {
-		return nil, errors.Annotate(err, "topic should be a regex string")
-	}
-	if handler == nil {
-		return nil, errors.NotValidf("missing handler")
-	}
-	f, err := h.checkHandler(handler)
+	sub, err := newSubscriber(topic, handler)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
 
-	id := h.idx
+	sub.id = h.idx
 	h.idx++
-	h.subscribers = append(h.subscribers, &subscriber{
-		id:      id,
-		topic:   matcher,
-		handler: f,
-	})
-
-	return &handle{hub: h, id: id}, nil
-}
-
-func (h *simplehub) checkHandler(handler interface{}) (func(string, interface{}), error) {
-	t := reflect.TypeOf(handler)
-	if t.Kind() != reflect.Func {
-		return nil, errors.NotValidf("handler of type %T", handler)
-	}
-	var result func(string, interface{})
-	rt := reflect.TypeOf(result)
-	if !t.AssignableTo(rt) {
-		return nil, errors.NotValidf("incorrect handler signature")
-	}
-	f, ok := handler.(func(string, interface{}))
-	if !ok {
-		// This shouldn't happen due to the assignable check just above.
-		return nil, errors.NotValidf("incorrect handler signature")
-	}
-	return f, nil
+	h.subscribers = append(h.subscribers, sub)
+	return &handle{hub: h, id: sub.id}, nil
 }
 
 func (h *simplehub) unsubscribe(id int) {
@@ -132,6 +96,7 @@ func (h *simplehub) unsubscribe(id int) {
 
 	for i, sub := range h.subscribers {
 		if sub.id == id {
+			sub.close()
 			h.subscribers = append(h.subscribers[0:i], h.subscribers[i+1:]...)
 			return
 		}
