@@ -31,21 +31,21 @@ subscribers have finished being notified.
 
 
 
-## type SimpleHub
+## type Hub
 ``` go
-type SimpleHub interface {
+type Hub interface {
 
     // Publish will notifiy all the subscribers that are interested by calling
     // their handler function.
-    Publish(topic string, data interface{}) Completer
+    Publish(topic string, data interface{}) (Completer, error)
 
     // Subscribe takes a topic regular expression, and a handler function.
     // If the topicRegex is not a valid regular expression, and error is returned.
-    Subscribe(topicRegex string, handler func(topic string, data interface{})) (Unsubscriber, error)
+    Subscribe(topicRegex string, handler interface{}) (Unsubscriber, error)
 }
 ```
-SimpleHub represents an in-process delivery mechanism. The hub maintains a
-list of topic subscribers. The data is passed through untouched.
+Hub represents an in-process delivery mechanism. The hub maintains a
+list of topic subscribers.
 
 
 
@@ -57,9 +57,26 @@ list of topic subscribers. The data is passed through untouched.
 
 ### func NewSimpleHub
 ``` go
-func NewSimpleHub() SimpleHub
+func NewSimpleHub() Hub
 ```
-NewSimpleHub returns a new empty SimpleHub instance.
+NewSimpleHub returns a new Hub instance.
+
+A simple hub does not touch the data that is passed through to Publish.
+This data is passed through to each Subscriber. Note that all subscribers
+are notified in parallel, and that no modification should be done to the
+data or data races will occur.
+
+
+### func NewStructuredHub
+``` go
+func NewStructuredHub(annotations map[string]interface{}) Hub
+```
+NewStructuredHub returns a new Hub instance.
+
+A structured hub serializes the data through an intermediate format.
+In this case, JSON.
+The annotations are added to each message that is published IFF the values
+are not already set.
 
 
 
