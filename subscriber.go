@@ -52,6 +52,8 @@ func newSubscriber(topic string, handler interface{}) (*subscriber, error) {
 }
 
 func (s *subscriber) close() {
+	// need to iterate through all the pending calls and make sure the wait group
+	// is decremented. this isn't exposed yet, but needs to be.
 	close(s.done)
 }
 

@@ -92,8 +92,8 @@ func (h *structuredHub) Subscribe(topic string, handler interface{}) (Unsubscrib
 		// with nil errors. reflect.ValueOf(nil) isn't a valid value. So we need
 		// to make  sure that we get the type of the parameter correct, which is
 		// the error interface.
-		errValue := reflect.ValueOf(&err)
-		args := []reflect.Value{reflect.ValueOf(t), value, reflect.Indirect(errValue)}
+		errValue := reflect.Indirect(reflect.ValueOf(&err))
+		args := []reflect.Value{reflect.ValueOf(t), value, errValue}
 		f.Call(args)
 	}
 	return h.simplehub.Subscribe(topic, deserialize)
