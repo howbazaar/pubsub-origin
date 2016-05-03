@@ -52,8 +52,13 @@ func newSubscriber(topic string, handler interface{}) (*subscriber, error) {
 }
 
 func (s *subscriber) close() {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
 	// need to iterate through all the pending calls and make sure the wait group
 	// is decremented. this isn't exposed yet, but needs to be.
+	for call, ok := s.pending.PopFront(); ok; call, ok = s.pending.PopFront() {
+		call.(*handlerCallback).Done()
+	}
 	close(s.done)
 }
 
@@ -78,12 +83,12 @@ func (s *subscriber) loop() {
 		// call *should* never be nil as we should only be calling
 		// popOne in the situations where there is actually something to pop.
 		if call != nil {
-			call()
+			call.Exec()
 		}
 	}
 }
 
-func (s *subscriber) popOne() (func(), bool) {
+func (s *subscriber) popOne() (*handlerCallback, bool) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 	val, ok := s.pending.PopFront()
@@ -92,10 +97,10 @@ func (s *subscriber) popOne() (func(), bool) {
 		return nil, true
 	}
 	empty := s.pending.Len() == 0
-	return val.(func()), empty
+	return val.(*handlerCallback), empty
 }
 
-func (s *subscriber) notify(call func()) {
+func (s *subscriber) notify(call *handlerCallback) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 	s.pending.PushBack(call)

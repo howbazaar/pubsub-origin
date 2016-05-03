@@ -60,10 +60,11 @@ func (h *simplehub) Publish(topic string, data interface{}) (Completer, error) {
 	for _, s := range h.subscribers {
 		if s.matchTopic(topic) {
 			wait.Add(1)
-			s.notify(func() {
-				defer wait.Done()
-				s.handler(topic, data)
-			})
+			s.notify(
+				&handlerCallback{
+					call: func() { s.handler(topic, data) },
+					wg:   &wait,
+				})
 		}
 	}
 
@@ -110,4 +111,21 @@ type handle struct {
 
 func (h *handle) Unsubscribe() {
 	h.hub.unsubscribe(h.id)
+}
+
+type handlerCallback struct {
+	call func()
+	wg   *sync.WaitGroup
+}
+
+func (h *handlerCallback) Exec() {
+	defer h.Done()
+	h.call()
+}
+
+func (h *handlerCallback) Done() {
+	if h.wg != nil {
+		h.wg.Done()
+		h.wg = nil
+	}
 }

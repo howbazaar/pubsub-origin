@@ -4,6 +4,8 @@
 package pubsub_test
 
 import (
+	"fmt"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -79,6 +81,90 @@ func (*SimpleHubSuite) TestPublishCompleterWaits(c *gc.C) {
 	}
 }
 
+func (*SimpleHubSuite) TestSubscriberExecsInOrder(c *gc.C) {
+	mutex := sync.Mutex{}
+	var calls []string
+	hub := pubsub.NewSimpleHub()
+	_, err := hub.Subscribe("test.*", func(topic string, data interface{}) {
+		mutex.Lock()
+		defer mutex.Unlock()
+		calls = append(calls, topic)
+	})
+	c.Assert(err, gc.IsNil)
+	var lastCall pubsub.Completer
+	for i := 0; i < 5; i++ {
+		lastCall, err = hub.Publish(fmt.Sprintf("test.%v", i), nil)
+		c.Assert(err, jc.ErrorIsNil)
+	}
+
+	select {
+	case <-lastCall.Complete():
+	case <-time.After(veryShortTime):
+		c.Fatal("publish did not complete")
+	}
+	c.Assert(calls, jc.DeepEquals, []string{"test.0", "test.1", "test.2", "test.3", "test.4"})
+}
+
+func (*SimpleHubSuite) TestPublishNotBlockedByHandlerFunc(c *gc.C) {
+	wait := make(chan struct{})
+	mutex := sync.Mutex{}
+	var calls []string
+	hub := pubsub.NewSimpleHub()
+	_, err := hub.Subscribe("test.*", func(topic string, data interface{}) {
+		<-wait
+		mutex.Lock()
+		defer mutex.Unlock()
+		calls = append(calls, topic)
+	})
+	c.Assert(err, gc.IsNil)
+	var lastCall pubsub.Completer
+	for i := 0; i < 5; i++ {
+		lastCall, err = hub.Publish(fmt.Sprintf("test.%v", i), nil)
+		c.Assert(err, jc.ErrorIsNil)
+	}
+	// release the handlers
+	close(wait)
+
+	select {
+	case <-lastCall.Complete():
+	case <-time.After(veryShortTime):
+		c.Fatal("publish did not complete")
+	}
+	c.Assert(calls, jc.DeepEquals, []string{"test.0", "test.1", "test.2", "test.3", "test.4"})
+}
+
+func (*SimpleHubSuite) TestUnsubcribeWithPendingHandlersMarksDone(c *gc.C) {
+	wait := make(chan struct{})
+	mutex := sync.Mutex{}
+	var calls []string
+	hub := pubsub.NewSimpleHub()
+	var unsubscriber pubsub.Unsubscriber
+	var err error
+	unsubscriber, err = hub.Subscribe("test.*", func(topic string, data interface{}) {
+		<-wait
+		mutex.Lock()
+		defer mutex.Unlock()
+		calls = append(calls, topic)
+		unsubscriber.Unsubscribe()
+	})
+	c.Assert(err, gc.IsNil)
+	var lastCall pubsub.Completer
+	for i := 0; i < 5; i++ {
+		lastCall, err = hub.Publish(fmt.Sprintf("test.%v", i), nil)
+		c.Assert(err, jc.ErrorIsNil)
+	}
+	// release the handlers
+	close(wait)
+
+	select {
+	case <-lastCall.Complete():
+	case <-time.After(veryShortTime):
+		c.Fatal("publish did not complete")
+	}
+	// Only the first handler should execute as we unsubscribe in it.
+	c.Assert(calls, jc.DeepEquals, []string{"test.0"})
+}
+
 func (*SimpleHubSuite) TestSubscribeRegexError(c *gc.C) {
 	hub := pubsub.NewSimpleHub()
 	_, err := hub.Subscribe("*", func(topic string, data interface{}) {})
@@ -93,7 +179,8 @@ func (*SimpleHubSuite) TestSubscribeMissingHandler(c *gc.C) {
 
 func (*SimpleHubSuite) TestSubscriberRegex(c *gc.C) {
 	count := int32(0)
-	callback := func(string, interface{}) {
+	callback := func(topic string, _ interface{}) {
+		c.Check(topic, gc.Equals, "testing")
 		atomic.AddInt32(&count, 1)
 	}
 	hub := pubsub.NewSimpleHub()
