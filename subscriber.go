@@ -30,13 +30,12 @@ func newSubscriber(topic string, handler interface{}) (*subscriber, error) {
 	if err != nil {
 		return nil, errors.Annotate(err, "topic should be a regex string")
 	}
-	if handler == nil {
-		return nil, errors.NotValidf("missing handler")
-	}
 	f, err := checkHandler(handler)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
+	// A closed channel is used to provide an immediate route through a select
+	// call in the loop function.
 	closed := make(chan struct{})
 	close(closed)
 	sub := &subscriber{
@@ -110,6 +109,9 @@ func (s *subscriber) notify(call *handlerCallback) {
 }
 
 func checkHandler(handler interface{}) (func(string, interface{}), error) {
+	if handler == nil {
+		return nil, errors.NotValidf("missing handler")
+	}
 	t := reflect.TypeOf(handler)
 	if t.Kind() != reflect.Func {
 		return nil, errors.NotValidf("handler of type %T", handler)

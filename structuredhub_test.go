@@ -21,18 +21,18 @@ type StructuredHubSuite struct {
 var _ = gc.Suite(&StructuredHubSuite{})
 
 type Emitter struct {
-	Origin  string `yaml:"origin"`
-	Message string `yaml:"message"`
-	ID      int    `yaml:"id"`
+	Origin  string `json:"origin"`
+	Message string `json:"message"`
+	ID      int    `json:"id"`
 }
 
 type JustOrigin struct {
-	Origin string `yaml:"origin"`
+	Origin string `json:"origin"`
 }
 
 type MessageID struct {
-	Message string `yaml:"message"`
-	ID      int    `yaml:"id"`
+	Message string `json:"message"`
+	Key     int    `json:"id"`
 }
 
 func (*StructuredHubSuite) TestPublishDeserialize(c *gc.C) {
@@ -54,7 +54,18 @@ func (*StructuredHubSuite) TestPublishDeserialize(c *gc.C) {
 		c.Check(err, jc.ErrorIsNil)
 		c.Check(topic, gc.Equals, "testing")
 		c.Check(data.Message, gc.Equals, source.Message)
-		c.Check(data.ID, gc.Equals, source.ID)
+		c.Check(data.Key, gc.Equals, source.ID)
+		atomic.AddInt32(&count, 1)
+	})
+	c.Assert(err, jc.ErrorIsNil)
+	_, err = hub.Subscribe("testing", func(topic string, data map[string]interface{}, err error) {
+		c.Check(err, jc.ErrorIsNil)
+		c.Check(topic, gc.Equals, "testing")
+		c.Check(data, jc.DeepEquals, map[string]interface{}{
+			"origin":  "test",
+			"message": "hello world",
+			"id":      float64(42), // ints are converted to floats through json.
+		})
 		atomic.AddInt32(&count, 1)
 	})
 	c.Assert(err, jc.ErrorIsNil)
@@ -66,6 +77,6 @@ func (*StructuredHubSuite) TestPublishDeserialize(c *gc.C) {
 	case <-time.After(veryShortTime):
 		c.Fatal("publish did not complete")
 	}
-	// Make sure they were both called.
-	c.Assert(count, gc.Equals, int32(2))
+	// Make sure they were all called.
+	c.Assert(count, gc.Equals, int32(3))
 }

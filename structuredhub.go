@@ -119,6 +119,7 @@ func (h *structuredHub) toHanderType(rt reflect.Type, data map[string]interface{
 // checkHandler makes sure that the handler is a function that takes a string and
 // a structure. Returns the reflect.Type for the structure.
 func (h *structuredHub) checkHandler(handler interface{}) (reflect.Type, error) {
+	mapType := reflect.TypeOf(map[string]interface{}{})
 	t := reflect.TypeOf(handler)
 	if t.Kind() != reflect.Func {
 		return nil, errors.NotValidf("handler of type %T", handler)
@@ -132,7 +133,7 @@ func (h *structuredHub) checkHandler(handler interface{}) (reflect.Type, error) 
 	if arg1.Kind() != reflect.String {
 		return nil, errors.NotValidf("incorrect handler signature, first arg should be a string for topic")
 	}
-	if arg2.Kind() != reflect.Struct { // TODO add map check.
+	if arg2.Kind() != reflect.Struct && arg2 != mapType {
 		return nil, errors.NotValidf("incorrect handler signature, second arg should be a structure for data")
 	}
 	if arg3.Kind() != reflect.Interface || arg3.Name() != "error" {
