@@ -217,3 +217,45 @@ func (*StructuredHubSuite) TestYAMLMarshalling(c *gc.C) {
 	// Make sure they were all called.
 	c.Assert(count, gc.Equals, int32(3))
 }
+
+func (*StructuredHubSuite) TesAnnotations(c *gc.C) {
+	source := Emitter{
+		Message: "hello world",
+		ID:      42,
+	}
+	origin := "master"
+	obtained := []string{}
+	hub := pubsub.NewStructuredHub(
+		&pubsub.StructuredHubConfig{
+			Annotations: map[string]interface{}{
+				"origin": origin,
+			},
+		})
+	_, err := hub.Subscribe("testing", func(topic string, data Emitter, err error) {
+		c.Check(err, jc.ErrorIsNil)
+		c.Check(topic, gc.Equals, "testing")
+		obtained = append(obtained, data.Origin)
+		c.Check(data.Message, gc.Equals, source.Message)
+		c.Check(data.ID, gc.Equals, source.ID)
+	})
+	c.Assert(err, jc.ErrorIsNil)
+	result, err := hub.Publish("testing", source)
+	c.Assert(err, jc.ErrorIsNil)
+
+	select {
+	case <-result.Complete():
+	case <-time.After(veryShortTime):
+		c.Fatal("publish did not complete")
+	}
+
+	source.Origin = "other"
+	result, err = hub.Publish("testing", source)
+	c.Assert(err, jc.ErrorIsNil)
+
+	select {
+	case <-result.Complete():
+	case <-time.After(veryShortTime):
+		c.Fatal("publish did not complete")
+	}
+	c.Assert(obtained, jc.DeepEquals, []string{origin, "other"})
+}
