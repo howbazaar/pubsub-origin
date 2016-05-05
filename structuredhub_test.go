@@ -10,6 +10,7 @@ import (
 	"github.com/juju/testing"
 	jc "github.com/juju/testing/checkers"
 	gc "gopkg.in/check.v1"
+	"gopkg.in/yaml.v2"
 
 	"github.com/juju/pubsub"
 )
@@ -155,4 +156,64 @@ func (*StructuredHubSuite) TestPublishDeserializeError(c *gc.C) {
 		c.Fatal("publish did not complete")
 	}
 	c.Assert(count, gc.Equals, int32(1))
+}
+
+type yamlMarshaller struct{}
+
+func (*yamlMarshaller) Marshal(v interface{}) ([]byte, error) {
+	return yaml.Marshal(v)
+}
+
+func (*yamlMarshaller) Unmarshal(data []byte, v interface{}) error {
+	return yaml.Unmarshal(data, v)
+}
+
+func (*StructuredHubSuite) TestYAMLMarshalling(c *gc.C) {
+	source := Emitter{
+		Origin:  "test",
+		Message: "hello world",
+		ID:      42,
+	}
+	count := int32(0)
+	hub := pubsub.NewStructuredHub(
+		&pubsub.StructuredHubConfig{
+			Marshaller: &yamlMarshaller{},
+		})
+	_, err := hub.Subscribe("testing", func(topic string, data JustOrigin, err error) {
+		c.Check(err, jc.ErrorIsNil)
+		c.Check(topic, gc.Equals, "testing")
+		c.Check(data.Origin, gc.Equals, source.Origin)
+		atomic.AddInt32(&count, 1)
+	})
+	c.Assert(err, jc.ErrorIsNil)
+	_, err = hub.Subscribe("testing", func(topic string, data MessageID, err error) {
+		c.Check(err, jc.ErrorIsNil)
+		c.Check(topic, gc.Equals, "testing")
+		c.Check(data.Message, gc.Equals, source.Message)
+		// Key is zero because there is no yaml serialization directive, and Key != ID.
+		c.Check(data.Key, gc.Equals, 0)
+		atomic.AddInt32(&count, 1)
+	})
+	c.Assert(err, jc.ErrorIsNil)
+	_, err = hub.Subscribe("testing", func(topic string, data map[string]interface{}, err error) {
+		c.Check(err, jc.ErrorIsNil)
+		c.Check(topic, gc.Equals, "testing")
+		c.Check(data, jc.DeepEquals, map[string]interface{}{
+			"origin":  "test",
+			"message": "hello world",
+			"id":      42, // yaml serializes integers just fine.
+		})
+		atomic.AddInt32(&count, 1)
+	})
+	c.Assert(err, jc.ErrorIsNil)
+	result, err := hub.Publish("testing", source)
+	c.Assert(err, jc.ErrorIsNil)
+
+	select {
+	case <-result.Complete():
+	case <-time.After(veryShortTime):
+		c.Fatal("publish did not complete")
+	}
+	// Make sure they were all called.
+	c.Assert(count, gc.Equals, int32(3))
 }
