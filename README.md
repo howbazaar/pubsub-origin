@@ -8,6 +8,13 @@ Package pubsub provides publish and subscribe functionality.
 
 
 
+## Variables
+``` go
+var JSONMarshaller = &jsonMarshaller{}
+```
+JSONMarshaller simply wraps the json.Marshal and json.Unmarshal calls for the
+Marshaller interface.
+
 
 
 ## type Completer
@@ -69,14 +76,55 @@ data or data races will occur.
 
 ### func NewStructuredHub
 ``` go
-func NewStructuredHub(annotations map[string]interface{}) Hub
+func NewStructuredHub(config *StructuredHubConfig) Hub
 ```
 NewStructuredHub returns a new Hub instance.
 
-A structured hub serializes the data through an intermediate format.
-In this case, JSON.
-The annotations are added to each message that is published IFF the values
-are not already set.
+
+
+
+## type Marshaller
+``` go
+type Marshaller interface {
+    Marshal(interface{}) ([]byte, error)
+    Unmarshal([]byte, interface{}) error
+}
+```
+Marshaller defines the Marshal and Unmarshal methods used to serialize and
+deserialize the structures used in Publish and Subscription handlers of the
+structured hub.
+
+
+
+
+
+
+
+
+
+
+
+## type StructuredHubConfig
+``` go
+type StructuredHubConfig struct {
+    // Marshaller defines how the structured hub will convert from structures to
+    // a map[string]interface{} and back. If this is not specified, the
+    // `JSONMarshaller` is used.
+    Marshaller Marshaller
+
+    // Annotations are added to each message that is published if and only if
+    // the values are not already set.
+    Annotations map[string]interface{}
+}
+```
+StructuredHubConfig is the argument struct for NewStructuredHub.
+
+
+
+
+
+
+
 
 
 
