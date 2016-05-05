@@ -14,21 +14,58 @@ import (
 type structuredHub struct {
 	simplehub
 
+	marshaller  Marshaller
 	annotations map[string]interface{}
 }
 
+// Marshaller defines the Marshal and Unmarshal methods used to serialize and
+// deserialize the structures used in Publish and Subscription handlers of the
+// structured hub.
+type Marshaller interface {
+	Marshal(interface{}) ([]byte, error)
+	Unmarshal([]byte, interface{}) error
+}
+
+// StructuredHubConfig is the argument struct for NewStructuredHub.
+type StructuredHubConfig struct {
+	// Marshaller defines how the structured hub will convert from structures to
+	// a map[string]interface{} and back. If this is not specified, the
+	// `JSONMarshaller` is used.
+	Marshaller Marshaller
+
+	// Annotations are added to each message that is published if and only if
+	// the values are not already set.
+	Annotations map[string]interface{}
+}
+
+// JSONMarshaller simply wraps the json.Marshal and json.Unmarshal calls for the
+// Marshaller interface.
+var JSONMarshaller = &jsonMarshaller{}
+
+type jsonMarshaller struct{}
+
+func (*jsonMarshaller) Marshal(v interface{}) ([]byte, error) {
+	return json.Marshal(v)
+}
+
+func (*jsonMarshaller) Unmarshal(data []byte, v interface{}) error {
+	return json.Unmarshal(data, v)
+}
+
 // NewStructuredHub returns a new Hub instance.
-//
-// A structured hub serializes the data through an intermediate format.
-// In this case, JSON.
-// The annotations are added to each message that is published IFF the values
-// are not already set.
-func NewStructuredHub(annotations map[string]interface{}) Hub {
+func NewStructuredHub(config *StructuredHubConfig) Hub {
+	if config == nil {
+		config = new(StructuredHubConfig)
+	}
+	if config.Marshaller == nil {
+		config.Marshaller = JSONMarshaller
+	}
 	return &structuredHub{
 		simplehub: simplehub{
 			logger: loggo.GetLogger("pubsub.structured"),
 		},
-		annotations: annotations,
+		marshaller:  config.Marshaller,
+		annotations: config.Annotations,
 	}
 }
 
@@ -57,11 +94,11 @@ func (h *structuredHub) toStringMap(data interface{}) (map[string]interface{}, e
 		}
 		return cast, nil
 	}
-	bytes, err := json.Marshal(data)
+	bytes, err := h.marshaller.Marshal(data)
 	if err != nil {
 		return nil, errors.Annotate(err, "json marshalling")
 	}
-	err = json.Unmarshal(bytes, &result)
+	err = h.marshaller.Unmarshal(bytes, &result)
 	if err != nil {
 		return nil, errors.Annotate(err, "json unmarshalling")
 	}
@@ -105,11 +142,11 @@ func (h *structuredHub) toHanderType(rt reflect.Type, data map[string]interface{
 		return reflect.ValueOf(data), nil
 	}
 	sv := reflect.New(rt) // returns a Value containing *StructType
-	bytes, err := json.Marshal(data)
+	bytes, err := h.marshaller.Marshal(data)
 	if err != nil {
 		return reflect.Indirect(sv), errors.Annotate(err, "json marshalling")
 	}
-	err = json.Unmarshal(bytes, sv.Interface())
+	err = h.marshaller.Unmarshal(bytes, sv.Interface())
 	if err != nil {
 		return reflect.Indirect(sv), errors.Annotate(err, "json unmarshalling")
 	}
