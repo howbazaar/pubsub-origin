@@ -4,6 +4,7 @@
 package pubsub_test
 
 import (
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -92,13 +93,17 @@ func (*StructuredHubSuite) TestPublishMap(c *gc.C) {
 		"message": "hello world",
 		"id":      42,
 	}
-	count := int32(0)
+	var (
+		originCalled  bool
+		messageCalled bool
+		mapCalled     bool
+	)
 	hub := pubsub.NewStructuredHub(nil)
 	_, err := hub.Subscribe("testing", func(topic string, data JustOrigin, err error) {
 		c.Check(err, jc.ErrorIsNil)
 		c.Check(topic, gc.Equals, "testing")
 		c.Check(data.Origin, gc.Equals, source["origin"])
-		atomic.AddInt32(&count, 1)
+		originCalled = true
 	})
 	c.Assert(err, jc.ErrorIsNil)
 	_, err = hub.Subscribe("testing", func(topic string, data MessageID, err error) {
@@ -106,7 +111,7 @@ func (*StructuredHubSuite) TestPublishMap(c *gc.C) {
 		c.Check(topic, gc.Equals, "testing")
 		c.Check(data.Message, gc.Equals, source["message"])
 		c.Check(data.Key, gc.Equals, source["id"])
-		atomic.AddInt32(&count, 1)
+		messageCalled = true
 	})
 	c.Assert(err, jc.ErrorIsNil)
 	_, err = hub.Subscribe("testing", func(topic string, data map[string]interface{}, err error) {
@@ -117,7 +122,7 @@ func (*StructuredHubSuite) TestPublishMap(c *gc.C) {
 			"message": "hello world",
 			"id":      42, // published maps don't go through the json map conversino
 		})
-		atomic.AddInt32(&count, 1)
+		mapCalled = true
 	})
 	c.Assert(err, jc.ErrorIsNil)
 	result, err := hub.Publish("testing", source)
@@ -129,7 +134,9 @@ func (*StructuredHubSuite) TestPublishMap(c *gc.C) {
 		c.Fatal("publish did not complete")
 	}
 	// Make sure they were all called.
-	c.Assert(count, gc.Equals, int32(3))
+	c.Check(originCalled, jc.IsTrue)
+	c.Check(messageCalled, jc.IsTrue)
+	c.Check(mapCalled, jc.IsTrue)
 }
 
 func (*StructuredHubSuite) TestPublishDeserializeError(c *gc.C) {
@@ -218,7 +225,7 @@ func (*StructuredHubSuite) TestYAMLMarshalling(c *gc.C) {
 	c.Assert(count, gc.Equals, int32(3))
 }
 
-func (*StructuredHubSuite) TesAnnotations(c *gc.C) {
+func (*StructuredHubSuite) TestAnnotations(c *gc.C) {
 	source := Emitter{
 		Message: "hello world",
 		ID:      42,
@@ -258,4 +265,46 @@ func (*StructuredHubSuite) TesAnnotations(c *gc.C) {
 		c.Fatal("publish did not complete")
 	}
 	c.Assert(obtained, jc.DeepEquals, []string{origin, "other"})
+}
+
+type Worker struct {
+	m          sync.Mutex
+	fromStruct []string
+	fromMap    []string
+}
+
+func (w *Worker) subMessage(topic string, data MessageID, err error) {
+	w.m.Lock()
+	defer w.m.Unlock()
+
+	w.fromStruct = append(w.fromStruct, data.Message)
+}
+
+func (w *Worker) subData(topic string, data map[string]interface{}, err error) {
+	w.m.Lock()
+	defer w.m.Unlock()
+
+	value, _ := data["message"].(string)
+	w.fromMap = append(w.fromMap, value)
+}
+
+func (*StructuredHubSuite) TestMultipleSubscribersSingleInstance(c *gc.C) {
+	hub := pubsub.NewStructuredHub(nil)
+	w := &Worker{}
+	_, err := hub.Subscribe(".*", w.subData)
+	c.Assert(err, jc.ErrorIsNil)
+	_, err = hub.Subscribe(".*", w.subMessage)
+	c.Assert(err, jc.ErrorIsNil)
+
+	result, err := hub.Publish("foo", MessageID{Message: "testing"})
+	c.Assert(err, jc.ErrorIsNil)
+
+	select {
+	case <-result.Complete():
+	case <-time.After(veryShortTime):
+		c.Fatal("publish did not complete")
+	}
+
+	c.Check(w.fromMap, jc.DeepEquals, []string{"testing"})
+	c.Check(w.fromStruct, jc.DeepEquals, []string{"testing"})
 }

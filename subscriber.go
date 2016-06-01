@@ -9,8 +9,11 @@ import (
 	"sync"
 
 	"github.com/juju/errors"
+	"github.com/juju/loggo"
 	"github.com/juju/utils/deque"
 )
+
+var logger = loggo.GetLogger("pubsub.subscriber")
 
 type subscriber struct {
 	id int
@@ -47,6 +50,7 @@ func newSubscriber(topic string, handler interface{}) (*subscriber, error) {
 		closed:  closed,
 	}
 	go sub.loop()
+	logger.Debugf("created subscriber %p for %q", sub, topic)
 	return sub, nil
 }
 
@@ -82,6 +86,7 @@ func (s *subscriber) loop() {
 		// call *should* never be nil as we should only be calling
 		// popOne in the situations where there is actually something to pop.
 		if call != nil {
+			logger.Debugf("exec callback %p (%d)", s, s.id)
 			call.Exec()
 		}
 	}
@@ -100,6 +105,7 @@ func (s *subscriber) popOne() (*handlerCallback, bool) {
 }
 
 func (s *subscriber) notify(call *handlerCallback) {
+	logger.Debugf("notify  %p (%d)", s, s.id)
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 	s.pending.PushBack(call)

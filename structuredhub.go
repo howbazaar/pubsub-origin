@@ -75,11 +75,12 @@ func (h *structuredHub) Publish(topic string, data interface{}) (Completer, erro
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	for key, value := range h.annotations {
-		if _, exists := asMap[key]; !exists {
-			asMap[key] = value
+	for key, defaultValue := range h.annotations {
+		if value, exists := asMap[key]; !exists || value == reflect.Zero(reflect.TypeOf(value)).Interface() {
+			asMap[key] = defaultValue
 		}
 	}
+	h.logger.Tracef("publish %q: %v", topic, data)
 	return h.simplehub.Publish(topic, asMap)
 }
 
@@ -111,8 +112,9 @@ func (h *structuredHub) Subscribe(topic string, handler interface{}) (Unsubscrib
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	f := reflect.ValueOf(handler)
+	h.logger.Debugf("subscribe return type %v", rt)
 	// Wrap the hander func in something that deserializes the YAML into the structure expected.
+	f := reflect.ValueOf(handler)
 	deserialize := func(t string, data interface{}) {
 		var (
 			err   error
@@ -123,6 +125,7 @@ func (h *structuredHub) Subscribe(topic string, handler interface{}) (Unsubscrib
 			err = errors.Errorf("bad publish data: %v", data)
 			value = reflect.Indirect(reflect.New(rt))
 		} else {
+			h.logger.Debugf("convert map to %v", rt)
 			value, err = h.toHanderType(rt, asMap)
 		}
 		// NOTE: you can't just use reflect.ValueOf(err) as that doesn't work
