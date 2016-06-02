@@ -62,8 +62,9 @@ func (h *simplehub) Publish(topic string, data interface{}) (Completer, error) {
 			wait.Add(1)
 			s.notify(
 				&handlerCallback{
-					call: func() { s.handler(topic, data) },
-					wg:   &wait,
+					topic: topic,
+					data:  data,
+					wg:    &wait,
 				})
 		}
 	}
@@ -114,13 +115,9 @@ func (h *handle) Unsubscribe() {
 }
 
 type handlerCallback struct {
-	call func()
-	wg   *sync.WaitGroup
-}
-
-func (h *handlerCallback) Exec() {
-	defer h.Done()
-	h.call()
+	topic string
+	data  interface{}
+	wg    *sync.WaitGroup
 }
 
 func (h *handlerCallback) Done() {

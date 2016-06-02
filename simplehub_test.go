@@ -218,3 +218,27 @@ func (*SimpleHubSuite) TestUnsubscribe(c *gc.C) {
 	}
 	c.Assert(called, jc.IsFalse)
 }
+
+func (*SimpleHubSuite) TestSubscriberMultipleCallbacks(c *gc.C) {
+	firstCalled := false
+	secondCalled := false
+	thirdCalled := false
+
+	hub := pubsub.NewSimpleHub()
+	hub.Subscribe("testing", func(string, interface{}) { firstCalled = true })
+	hub.Subscribe("testing", func(string, interface{}) { secondCalled = true })
+	hub.Subscribe("testing", func(string, interface{}) { thirdCalled = true })
+
+	result, err := hub.Publish("testing", nil)
+	c.Assert(err, jc.ErrorIsNil)
+
+	select {
+	case <-result.Complete():
+	case <-time.After(veryShortTime):
+		c.Fatal("publish did not complete")
+	}
+
+	c.Check(firstCalled, jc.IsTrue)
+	c.Check(secondCalled, jc.IsTrue)
+	c.Check(thirdCalled, jc.IsTrue)
+}
