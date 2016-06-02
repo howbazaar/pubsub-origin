@@ -118,9 +118,12 @@ type handlerCallback struct {
 	topic string
 	data  interface{}
 	wg    *sync.WaitGroup
+	mu    sync.Mutex
 }
 
 func (h *handlerCallback) Done() {
+	h.mu.Lock()
+	defer h.mu.Unlock()
 	if h.wg != nil {
 		h.wg.Done()
 		h.wg = nil
