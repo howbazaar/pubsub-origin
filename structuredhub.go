@@ -124,7 +124,7 @@ func (h *structuredHub) Subscribe(topic string, handler interface{}) (Unsubscrib
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	h.logger.Debugf("subscribe return type %v", rt)
+	h.logger.Tracef("subscribe return type %v", rt)
 	// Wrap the hander func in something that deserializes the YAML into the structure expected.
 	f := reflect.ValueOf(handler)
 	deserialize := func(t string, data interface{}) {
@@ -137,7 +137,7 @@ func (h *structuredHub) Subscribe(topic string, handler interface{}) (Unsubscrib
 			err = errors.Errorf("bad publish data: %v", data)
 			value = reflect.Indirect(reflect.New(rt))
 		} else {
-			h.logger.Debugf("convert map to %v", rt)
+			h.logger.Tracef("convert map to %v", rt)
 			value, err = h.toHanderType(rt, asMap)
 		}
 		// NOTE: you can't just use reflect.ValueOf(err) as that doesn't work
