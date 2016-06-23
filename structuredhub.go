@@ -16,6 +16,7 @@ type structuredHub struct {
 
 	marshaller  Marshaller
 	annotations map[string]interface{}
+	postProcess func(map[string]interface{}) (map[string]interface{}, error)
 }
 
 // Marshaller defines the Marshal and Unmarshal methods used to serialize and
@@ -36,6 +37,10 @@ type StructuredHubConfig struct {
 	// Annotations are added to each message that is published if and only if
 	// the values are not already set.
 	Annotations map[string]interface{}
+
+	// PostProcess allows the caller to modify the resulting
+	// map[string]interface{}.
+	PostProcess func(map[string]interface{}) (map[string]interface{}, error)
 }
 
 // JSONMarshaller simply wraps the json.Marshal and json.Unmarshal calls for the
@@ -66,6 +71,7 @@ func NewStructuredHub(config *StructuredHubConfig) Hub {
 		},
 		marshaller:  config.Marshaller,
 		annotations: config.Annotations,
+		postProcess: config.PostProcess,
 	}
 }
 
@@ -80,7 +86,13 @@ func (h *structuredHub) Publish(topic string, data interface{}) (Completer, erro
 			asMap[key] = defaultValue
 		}
 	}
-	h.logger.Tracef("publish %q: %v", topic, data)
+	if h.postProcess != nil {
+		asMap, err = h.postProcess(asMap)
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+	}
+	h.logger.Tracef("publish %q: %#v", topic, asMap)
 	return h.simplehub.Publish(topic, asMap)
 }
 
@@ -97,11 +109,11 @@ func (h *structuredHub) toStringMap(data interface{}) (map[string]interface{}, e
 	}
 	bytes, err := h.marshaller.Marshal(data)
 	if err != nil {
-		return nil, errors.Annotate(err, "json marshalling")
+		return nil, errors.Annotate(err, "marshalling")
 	}
 	err = h.marshaller.Unmarshal(bytes, &result)
 	if err != nil {
-		return nil, errors.Annotate(err, "json unmarshalling")
+		return nil, errors.Annotate(err, "unmarshalling")
 	}
 	return result, nil
 }

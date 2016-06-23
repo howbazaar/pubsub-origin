@@ -37,7 +37,7 @@ func newSubscriber(topic string, handler interface{}) (*subscriber, error) {
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	logger.Debugf("new subscriber, handler func %v", f)
+	logger.Tracef("new subscriber, handler func %v", f)
 	// A closed channel is used to provide an immediate route through a select
 	// call in the loop function.
 	closed := make(chan struct{})
@@ -87,7 +87,7 @@ func (s *subscriber) loop() {
 		// call *should* never be nil as we should only be calling
 		// popOne in the situations where there is actually something to pop.
 		if call != nil {
-			logger.Debugf("exec callback %p (%d) func %p", s, s.id, s.handler)
+			logger.Tracef("exec callback %p (%d) func %p", s, s.id, s.handler)
 			s.handler(call.topic, call.data)
 			call.Done()
 		}
@@ -107,7 +107,7 @@ func (s *subscriber) popOne() (*handlerCallback, bool) {
 }
 
 func (s *subscriber) notify(call *handlerCallback) {
-	logger.Debugf("notify  %p (%d)", s, s.id)
+	logger.Tracef("notify  %p (%d)", s, s.id)
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 	s.pending.PushBack(call)
@@ -117,7 +117,7 @@ func (s *subscriber) notify(call *handlerCallback) {
 }
 
 func checkHandler(handler interface{}) (func(string, interface{}), error) {
-	logger.Debugf("checkHandler, handler func %v", handler)
+	logger.Tracef("checkHandler, handler func %v", handler)
 	if handler == nil {
 		return nil, errors.NotValidf("missing handler")
 	}
