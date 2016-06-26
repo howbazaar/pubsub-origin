@@ -160,40 +160,11 @@ func (*SimpleHubSuite) TestUnsubcribeWithPendingHandlersMarksDone(c *gc.C) {
 	c.Assert(calls, jc.DeepEquals, []pubsub.Topic{topic})
 }
 
-// func (*SimpleHubSuite) TestSubscribeRegexError(c *gc.C) {
-// 	hub := pubsub.NewSimpleHub()
-// 	_, err := hub.Subscribe("*", func(topic string, data interface{}) {})
-// 	c.Assert(err, gc.ErrorMatches, "topic should be a regex string: error parsing regexp: .*")
-// }
-
 func (*SimpleHubSuite) TestSubscribeMissingHandler(c *gc.C) {
 	hub := pubsub.NewSimpleHub()
 	_, err := hub.Subscribe(topic, nil)
 	c.Assert(err, gc.ErrorMatches, "missing handler not valid")
 }
-
-// func (*SimpleHubSuite) TestSubscriberRegex(c *gc.C) {
-// 	count := int32(0)
-// 	callback := func(topic string, _ interface{}) {
-// 		c.Check(topic, gc.Equals, "testing")
-// 		atomic.AddInt32(&count, 1)
-// 	}
-// 	hub := pubsub.NewSimpleHub()
-// 	hub.Subscribe("testing", callback)
-// 	hub.Subscribe("other", callback)
-// 	hub.Subscribe("test.*", callback)
-// 	hub.Subscribe("tes.ing", callback)
-
-// 	result, err := hub.Publish("testing", nil)
-// 	c.Assert(err, jc.ErrorIsNil)
-
-// 	select {
-// 	case <-result.Complete():
-// 	case <-time.After(veryShortTime):
-// 		c.Fatal("publish did not complete")
-// 	}
-// 	c.Assert(count, gc.Equals, int32(3))
-// }
 
 func (*SimpleHubSuite) TestUnsubscribe(c *gc.C) {
 	var called bool
