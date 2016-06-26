@@ -5,7 +5,6 @@ package pubsub
 
 import (
 	"reflect"
-	"regexp"
 	"sync"
 
 	"github.com/juju/errors"
@@ -18,8 +17,8 @@ var logger = loggo.GetLogger("pubsub.subscriber")
 type subscriber struct {
 	id int
 
-	topic   *regexp.Regexp
-	handler func(topic string, data interface{})
+	topicMatcher TopicMatcher
+	handler      func(topic Topic, data interface{})
 
 	mutex   sync.Mutex
 	pending *deque.Deque
@@ -28,11 +27,7 @@ type subscriber struct {
 	done    chan struct{}
 }
 
-func newSubscriber(topic string, handler interface{}) (*subscriber, error) {
-	matcher, err := regexp.Compile(topic)
-	if err != nil {
-		return nil, errors.Annotate(err, "topic should be a regex string")
-	}
+func newSubscriber(matcher TopicMatcher, handler interface{}) (*subscriber, error) {
 	f, err := checkHandler(handler)
 	if err != nil {
 		return nil, errors.Trace(err)
@@ -43,15 +38,15 @@ func newSubscriber(topic string, handler interface{}) (*subscriber, error) {
 	closed := make(chan struct{})
 	close(closed)
 	sub := &subscriber{
-		topic:   matcher,
-		handler: f,
-		pending: deque.New(),
-		data:    make(chan struct{}, 1),
-		done:    make(chan struct{}),
-		closed:  closed,
+		topicMatcher: matcher,
+		handler:      f,
+		pending:      deque.New(),
+		data:         make(chan struct{}, 1),
+		done:         make(chan struct{}),
+		closed:       closed,
 	}
 	go sub.loop()
-	logger.Debugf("created subscriber %p for %q", sub, topic)
+	logger.Debugf("created subscriber %p for %v", sub, matcher)
 	return sub, nil
 }
 
@@ -107,7 +102,7 @@ func (s *subscriber) popOne() (*handlerCallback, bool) {
 }
 
 func (s *subscriber) notify(call *handlerCallback) {
-	logger.Tracef("notify  %p (%d)", s, s.id)
+	logger.Tracef("notify %d", s.id)
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 	s.pending.PushBack(call)
@@ -116,7 +111,10 @@ func (s *subscriber) notify(call *handlerCallback) {
 	}
 }
 
-func checkHandler(handler interface{}) (func(string, interface{}), error) {
+// checkHandler makes sure that the handler value passed in is a function
+// and has the signature:
+//    func(Topic, interface{})
+func checkHandler(handler interface{}) (func(Topic, interface{}), error) {
 	logger.Tracef("checkHandler, handler func %v", handler)
 	if handler == nil {
 		return nil, errors.NotValidf("missing handler")
@@ -125,12 +123,12 @@ func checkHandler(handler interface{}) (func(string, interface{}), error) {
 	if t.Kind() != reflect.Func {
 		return nil, errors.NotValidf("handler of type %T", handler)
 	}
-	var result func(string, interface{})
+	var result func(Topic, interface{})
 	rt := reflect.TypeOf(result)
 	if !t.AssignableTo(rt) {
 		return nil, errors.NotValidf("incorrect handler signature")
 	}
-	f, ok := handler.(func(string, interface{}))
+	f, ok := handler.(func(Topic, interface{}))
 	if !ok {
 		// This shouldn't happen due to the assignable check just above.
 		return nil, errors.NotValidf("incorrect handler signature")

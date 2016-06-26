@@ -29,10 +29,10 @@ func (*SubscriberSuite) TestHander(c *gc.C) {
 		handler: func() {},
 		errText: "incorrect handler signature not valid",
 	}, {
-		handler: func(string, TestStruct) {},
+		handler: func(Topic, TestStruct) {},
 		errText: "incorrect handler signature not valid",
 	}, {
-		handler: func(string, interface{}) {},
+		handler: func(Topic, interface{}) {},
 	}} {
 		c.Logf("test %d", i)
 		handlerFunc, err := checkHandler(test.handler)

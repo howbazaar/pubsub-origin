@@ -76,7 +76,7 @@ func NewStructuredHub(config *StructuredHubConfig) Hub {
 }
 
 // Publish implements Hub.
-func (h *structuredHub) Publish(topic string, data interface{}) (Completer, error) {
+func (h *structuredHub) Publish(topic Topic, data interface{}) (Completer, error) {
 	asMap, err := h.toStringMap(data)
 	if err != nil {
 		return nil, errors.Trace(err)
@@ -119,15 +119,15 @@ func (h *structuredHub) toStringMap(data interface{}) (map[string]interface{}, e
 }
 
 // Subscribe implements Hub.
-func (h *structuredHub) Subscribe(topic string, handler interface{}) (Unsubscriber, error) {
-	rt, err := h.checkHandler(handler)
+func (h *structuredHub) Subscribe(matcher TopicMatcher, handler interface{}) (Unsubscriber, error) {
+	rt, err := checkStructuredHandler(handler)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
 	h.logger.Tracef("subscribe return type %v", rt)
 	// Wrap the hander func in something that deserializes the YAML into the structure expected.
 	f := reflect.ValueOf(handler)
-	deserialize := func(t string, data interface{}) {
+	deserialize := func(t Topic, data interface{}) {
 		var (
 			err   error
 			value reflect.Value
@@ -148,7 +148,7 @@ func (h *structuredHub) Subscribe(topic string, handler interface{}) (Unsubscrib
 		args := []reflect.Value{reflect.ValueOf(t), value, errValue}
 		f.Call(args)
 	}
-	return h.simplehub.Subscribe(topic, deserialize)
+	return h.simplehub.Subscribe(matcher, deserialize)
 }
 
 func (h *structuredHub) toHanderType(rt reflect.Type, data map[string]interface{}) (reflect.Value, error) {
@@ -168,9 +168,10 @@ func (h *structuredHub) toHanderType(rt reflect.Type, data map[string]interface{
 	return reflect.Indirect(sv), nil
 }
 
-// checkHandler makes sure that the handler is a function that takes a string and
-// a structure. Returns the reflect.Type for the structure.
-func (h *structuredHub) checkHandler(handler interface{}) (reflect.Type, error) {
+// checkStructuredHandler makes sure that the handler is a function that takes
+// a Topic, a structure, and an error. Returns the reflect.Type for the
+// structure.
+func checkStructuredHandler(handler interface{}) (reflect.Type, error) {
 	mapType := reflect.TypeOf(map[string]interface{}{})
 	t := reflect.TypeOf(handler)
 	if t.Kind() != reflect.Func {
@@ -179,18 +180,20 @@ func (h *structuredHub) checkHandler(handler interface{}) (reflect.Type, error) 
 	if t.NumIn() != 3 || t.NumOut() != 0 {
 		return nil, errors.NotValidf("incorrect handler signature")
 	}
+	var topic Topic
+	var topicType = reflect.TypeOf(topic)
+
 	arg1 := t.In(0)
 	arg2 := t.In(1)
 	arg3 := t.In(2)
-	if arg1.Kind() != reflect.String {
-		return nil, errors.NotValidf("incorrect handler signature, first arg should be a string for topic")
+	if arg1 != topicType {
+		return nil, errors.NotValidf("incorrect handler signature, first arg should be a pubsub.Topic")
 	}
 	if arg2.Kind() != reflect.Struct && arg2 != mapType {
 		return nil, errors.NotValidf("incorrect handler signature, second arg should be a structure for data")
 	}
 	if arg3.Kind() != reflect.Interface || arg3.Name() != "error" {
-		h.logger.Errorf("expected error type, got %#v", arg3.Name())
-		return nil, errors.NotValidf("incorrect handler signature, third arg should error for deserialization errors")
+		return nil, errors.NotValidf("incorrect handler signature, third arg should be error for deserialization errors")
 	}
 	return arg2, nil
 }

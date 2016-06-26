@@ -46,11 +46,7 @@ func (h *simplehub) dupeSubscribers() []*subscriber {
 	return dupe
 }
 
-func (s *subscriber) matchTopic(topic string) bool {
-	return s.topic.MatchString(topic)
-}
-
-func (h *simplehub) Publish(topic string, data interface{}) (Completer, error) {
+func (h *simplehub) Publish(topic Topic, data interface{}) (Completer, error) {
 	h.mutex.Lock()
 	defer h.mutex.Unlock()
 
@@ -58,7 +54,7 @@ func (h *simplehub) Publish(topic string, data interface{}) (Completer, error) {
 	wait := sync.WaitGroup{}
 
 	for _, s := range h.subscribers {
-		if s.matchTopic(topic) {
+		if s.topicMatcher.Match(topic) {
 			wait.Add(1)
 			s.notify(
 				&handlerCallback{
@@ -77,11 +73,11 @@ func (h *simplehub) Publish(topic string, data interface{}) (Completer, error) {
 	return &doneHandle{done: done}, nil
 }
 
-func (h *simplehub) Subscribe(topic string, handler interface{}) (Unsubscriber, error) {
+func (h *simplehub) Subscribe(matcher TopicMatcher, handler interface{}) (Unsubscriber, error) {
 	h.mutex.Lock()
 	defer h.mutex.Unlock()
 
-	sub, err := newSubscriber(topic, handler)
+	sub, err := newSubscriber(matcher, handler)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -115,7 +111,7 @@ func (h *handle) Unsubscribe() {
 }
 
 type handlerCallback struct {
-	topic string
+	topic Topic
 	data  interface{}
 	wg    *sync.WaitGroup
 	mu    sync.Mutex
