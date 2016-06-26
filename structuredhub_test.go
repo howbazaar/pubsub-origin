@@ -148,7 +148,7 @@ func (*StructuredHubSuite) TestPublishDeserializeError(c *gc.C) {
 	count := int32(0)
 	hub := pubsub.NewStructuredHub(nil)
 	_, err := hub.Subscribe(topic, func(topic pubsub.Topic, data BadID, err error) {
-		c.Check(err.Error(), gc.Equals, "json unmarshalling: json: cannot unmarshal number into Go value of type string")
+		c.Check(err.Error(), gc.Equals, "unmarshalling data: json: cannot unmarshal number into Go value of type string")
 		c.Check(topic, gc.Equals, topic)
 		c.Check(data.ID, gc.Equals, "")
 		atomic.AddInt32(&count, 1)

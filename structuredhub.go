@@ -120,50 +120,26 @@ func (h *structuredHub) toStringMap(data interface{}) (map[string]interface{}, e
 
 // Subscribe implements Hub.
 func (h *structuredHub) Subscribe(matcher TopicMatcher, handler interface{}) (Unsubscriber, error) {
-	rt, err := checkStructuredHandler(handler)
+	callback, err := newStructuredCallback(h.marshaller, handler)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	h.logger.Tracef("subscribe return type %v", rt)
-	// Wrap the hander func in something that deserializes the YAML into the structure expected.
-	f := reflect.ValueOf(handler)
-	deserialize := func(t Topic, data interface{}) {
-		var (
-			err   error
-			value reflect.Value
-		)
-		asMap, ok := data.(map[string]interface{})
-		if !ok {
-			err = errors.Errorf("bad publish data: %v", data)
-			value = reflect.Indirect(reflect.New(rt))
-		} else {
-			h.logger.Tracef("convert map to %v", rt)
-			value, err = h.toHanderType(rt, asMap)
-		}
-		// NOTE: you can't just use reflect.ValueOf(err) as that doesn't work
-		// with nil errors. reflect.ValueOf(nil) isn't a valid value. So we need
-		// to make  sure that we get the type of the parameter correct, which is
-		// the error interface.
-		errValue := reflect.Indirect(reflect.ValueOf(&err))
-		args := []reflect.Value{reflect.ValueOf(t), value, errValue}
-		f.Call(args)
-	}
-	return h.simplehub.Subscribe(matcher, deserialize)
+	return h.simplehub.Subscribe(matcher, callback.handler)
 }
 
-func (h *structuredHub) toHanderType(rt reflect.Type, data map[string]interface{}) (reflect.Value, error) {
+func toHanderType(marshaller Marshaller, rt reflect.Type, data map[string]interface{}) (reflect.Value, error) {
 	mapType := reflect.TypeOf(data)
 	if mapType == rt {
 		return reflect.ValueOf(data), nil
 	}
 	sv := reflect.New(rt) // returns a Value containing *StructType
-	bytes, err := h.marshaller.Marshal(data)
+	bytes, err := marshaller.Marshal(data)
 	if err != nil {
-		return reflect.Indirect(sv), errors.Annotate(err, "json marshalling")
+		return reflect.Indirect(sv), errors.Annotate(err, "marshalling data")
 	}
-	err = h.marshaller.Unmarshal(bytes, sv.Interface())
+	err = marshaller.Unmarshal(bytes, sv.Interface())
 	if err != nil {
-		return reflect.Indirect(sv), errors.Annotate(err, "json unmarshalling")
+		return reflect.Indirect(sv), errors.Annotate(err, "unmarshalling data")
 	}
 	return reflect.Indirect(sv), nil
 }
