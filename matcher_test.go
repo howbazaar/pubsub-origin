@@ -16,14 +16,37 @@ type MatcherSuite struct {
 
 var (
 	_ = gc.Suite(&MatcherSuite{})
+
+	first    pubsub.Topic = "first"
+	firstdot pubsub.Topic = "first.next"
+	second   pubsub.Topic = "second"
+	space    pubsub.Topic = "a topic"
 )
 
 func (*MatcherSuite) TestTopicMatches(c *gc.C) {
-	var (
-		first   pubsub.Topic        = "first"
-		second  pubsub.Topic        = "second"
-		matcher pubsub.TopicMatcher = first
-	)
+	var matcher pubsub.TopicMatcher = first
 	c.Assert(matcher.Match(first), jc.IsTrue)
+	c.Assert(matcher.Match(firstdot), jc.IsFalse)
 	c.Assert(matcher.Match(second), jc.IsFalse)
+	c.Assert(matcher.Match(space), jc.IsFalse)
+}
+
+func (*MatcherSuite) TestMatchAll(c *gc.C) {
+	matcher := pubsub.MatchAll
+	c.Assert(matcher.Match(first), jc.IsTrue)
+	c.Assert(matcher.Match(firstdot), jc.IsTrue)
+	c.Assert(matcher.Match(second), jc.IsTrue)
+	c.Assert(matcher.Match(space), jc.IsTrue)
+}
+
+func (*MatcherSuite) TestMatchRegexPanicsOnInvalid(c *gc.C) {
+	c.Assert(func() { pubsub.MatchRegex("*") }, gc.PanicMatches, "expression must be a valid regular expression: error parsing regexp: .*")
+}
+
+func (*MatcherSuite) TestMatchRegex(c *gc.C) {
+	matcher := pubsub.MatchRegex("first.*")
+	c.Assert(matcher.Match(first), jc.IsTrue)
+	c.Assert(matcher.Match(firstdot), jc.IsTrue)
+	c.Assert(matcher.Match(second), jc.IsFalse)
+	c.Assert(matcher.Match(space), jc.IsFalse)
 }
