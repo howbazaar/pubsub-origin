@@ -56,7 +56,7 @@ func (s *subscriber) close() {
 	// need to iterate through all the pending calls and make sure the wait group
 	// is decremented. this isn't exposed yet, but needs to be.
 	for call, ok := s.pending.PopFront(); ok; call, ok = s.pending.PopFront() {
-		call.(*handlerCallback).Done()
+		call.(*handlerCallback).done()
 	}
 	close(s.done)
 }
@@ -84,7 +84,7 @@ func (s *subscriber) loop() {
 		if call != nil {
 			logger.Tracef("exec callback %p (%d) func %p", s, s.id, s.handler)
 			s.handler(call.topic, call.data)
-			call.Done()
+			call.done()
 		}
 	}
 }

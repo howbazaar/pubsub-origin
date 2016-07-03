@@ -37,10 +37,12 @@ type doneHandle struct {
 	done chan struct{}
 }
 
+// Complete implements Completer.
 func (d *doneHandle) Complete() <-chan struct{} {
 	return d.done
 }
 
+// Publish implements Hub.
 func (h *simplehub) Publish(topic Topic, data interface{}) (Completer, error) {
 	h.mutex.Lock()
 	defer h.mutex.Unlock()
@@ -68,6 +70,7 @@ func (h *simplehub) Publish(topic Topic, data interface{}) (Completer, error) {
 	return &doneHandle{done: done}, nil
 }
 
+// Subscribe implements Hub.
 func (h *simplehub) Subscribe(matcher TopicMatcher, handler interface{}) (Unsubscriber, error) {
 	h.mutex.Lock()
 	defer h.mutex.Unlock()
@@ -101,6 +104,7 @@ type handle struct {
 	id  int
 }
 
+// Unsubscribe implements Unsubscriber.
 func (h *handle) Unsubscribe() {
 	h.hub.unsubscribe(h.id)
 }
@@ -112,7 +116,7 @@ type handlerCallback struct {
 	mu    sync.Mutex
 }
 
-func (h *handlerCallback) Done() {
+func (h *handlerCallback) done() {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if h.wg != nil {
