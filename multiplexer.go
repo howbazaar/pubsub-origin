@@ -4,7 +4,6 @@
 package pubsub
 
 import (
-	"reflect"
 	"sync"
 
 	"github.com/juju/errors"
@@ -86,45 +85,4 @@ func (m *multiplexer) Match(topic Topic) bool {
 		}
 	}
 	return false
-}
-
-type structuredCallback struct {
-	marshaller Marshaller
-	callback   reflect.Value
-	dataType   reflect.Type
-}
-
-func newStructuredCallback(marshaller Marshaller, handler interface{}) (*structuredCallback, error) {
-	rt, err := checkStructuredHandler(handler)
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-	logger.Tracef("new structured callback, return type %v", rt)
-	return &structuredCallback{
-		marshaller: marshaller,
-		callback:   reflect.ValueOf(handler),
-		dataType:   rt,
-	}, nil
-}
-
-func (s *structuredCallback) handler(topic Topic, data interface{}) {
-	var (
-		err   error
-		value reflect.Value
-	)
-	asMap, ok := data.(map[string]interface{})
-	if !ok {
-		err = errors.Errorf("bad data: %v", data)
-		value = reflect.Indirect(reflect.New(s.dataType))
-	} else {
-		logger.Tracef("convert map to %v", s.dataType)
-		value, err = toHanderType(s.marshaller, s.dataType, asMap)
-	}
-	// NOTE: you can't just use reflect.ValueOf(err) as that doesn't work
-	// with nil errors. reflect.ValueOf(nil) isn't a valid value. So we need
-	// to make  sure that we get the type of the parameter correct, which is
-	// the error interface.
-	errValue := reflect.Indirect(reflect.ValueOf(&err))
-	args := []reflect.Value{reflect.ValueOf(topic), value, errValue}
-	s.callback.Call(args)
 }

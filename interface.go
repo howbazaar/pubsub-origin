@@ -23,7 +23,8 @@ type Hub interface {
 	// Subscribe takes a topic matcher, and a handler function. If the matcher
 	// matches the published topic, the handler function is called. If the
 	// handler function does not match what the Hub expects an error is
-	// returned.
+	// returned. The definition of the handler function depends on the hub
+	// implementation. Please see NewSimpleHub and NewStructuredHub.
 	Subscribe(matcher TopicMatcher, handler interface{}) (Unsubscriber, error)
 }
 

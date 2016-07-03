@@ -5,7 +5,6 @@ package pubsub_test
 
 import (
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/juju/testing"
@@ -47,13 +46,17 @@ func (*StructuredHubSuite) TestPublishDeserialize(c *gc.C) {
 		Message: "hello world",
 		ID:      42,
 	}
-	count := int32(0)
+	var (
+		originCalled  bool
+		messageCalled bool
+		mapCalled     bool
+	)
 	hub := pubsub.NewStructuredHub(nil)
 	_, err := hub.Subscribe(topic, func(topic pubsub.Topic, data JustOrigin, err error) {
 		c.Check(err, jc.ErrorIsNil)
 		c.Check(topic, gc.Equals, topic)
 		c.Check(data.Origin, gc.Equals, source.Origin)
-		atomic.AddInt32(&count, 1)
+		originCalled = true
 	})
 	c.Assert(err, jc.ErrorIsNil)
 	_, err = hub.Subscribe(topic, func(topic pubsub.Topic, data MessageID, err error) {
@@ -61,7 +64,7 @@ func (*StructuredHubSuite) TestPublishDeserialize(c *gc.C) {
 		c.Check(topic, gc.Equals, topic)
 		c.Check(data.Message, gc.Equals, source.Message)
 		c.Check(data.Key, gc.Equals, source.ID)
-		atomic.AddInt32(&count, 1)
+		messageCalled = true
 	})
 	c.Assert(err, jc.ErrorIsNil)
 	_, err = hub.Subscribe(topic, func(topic pubsub.Topic, data map[string]interface{}, err error) {
@@ -72,7 +75,7 @@ func (*StructuredHubSuite) TestPublishDeserialize(c *gc.C) {
 			"message": "hello world",
 			"id":      float64(42), // ints are converted to floats through json.
 		})
-		atomic.AddInt32(&count, 1)
+		mapCalled = true
 	})
 	c.Assert(err, jc.ErrorIsNil)
 	result, err := hub.Publish(topic, source)
@@ -84,7 +87,9 @@ func (*StructuredHubSuite) TestPublishDeserialize(c *gc.C) {
 		c.Fatal("publish did not complete")
 	}
 	// Make sure they were all called.
-	c.Assert(count, gc.Equals, int32(3))
+	c.Check(originCalled, jc.IsTrue)
+	c.Check(messageCalled, jc.IsTrue)
+	c.Check(mapCalled, jc.IsTrue)
 }
 
 func (*StructuredHubSuite) TestPublishMap(c *gc.C) {
@@ -145,13 +150,13 @@ func (*StructuredHubSuite) TestPublishDeserializeError(c *gc.C) {
 		Message: "hello world",
 		ID:      42,
 	}
-	count := int32(0)
+	called := false
 	hub := pubsub.NewStructuredHub(nil)
 	_, err := hub.Subscribe(topic, func(topic pubsub.Topic, data BadID, err error) {
 		c.Check(err.Error(), gc.Equals, "unmarshalling data: json: cannot unmarshal number into Go value of type string")
 		c.Check(topic, gc.Equals, topic)
 		c.Check(data.ID, gc.Equals, "")
-		atomic.AddInt32(&count, 1)
+		called = true
 	})
 	c.Assert(err, jc.ErrorIsNil)
 	result, err := hub.Publish(topic, source)
@@ -162,7 +167,7 @@ func (*StructuredHubSuite) TestPublishDeserializeError(c *gc.C) {
 	case <-time.After(veryShortTime):
 		c.Fatal("publish did not complete")
 	}
-	c.Assert(count, gc.Equals, int32(1))
+	c.Assert(called, jc.IsTrue)
 }
 
 type yamlMarshaller struct{}
@@ -181,28 +186,12 @@ func (*StructuredHubSuite) TestYAMLMarshalling(c *gc.C) {
 		Message: "hello world",
 		ID:      42,
 	}
-	count := int32(0)
+	called := false
 	hub := pubsub.NewStructuredHub(
 		&pubsub.StructuredHubConfig{
 			Marshaller: &yamlMarshaller{},
 		})
-	_, err := hub.Subscribe(topic, func(topic pubsub.Topic, data JustOrigin, err error) {
-		c.Check(err, jc.ErrorIsNil)
-		c.Check(topic, gc.Equals, topic)
-		c.Check(data.Origin, gc.Equals, source.Origin)
-		atomic.AddInt32(&count, 1)
-	})
-	c.Assert(err, jc.ErrorIsNil)
-	_, err = hub.Subscribe(topic, func(topic pubsub.Topic, data MessageID, err error) {
-		c.Check(err, jc.ErrorIsNil)
-		c.Check(topic, gc.Equals, topic)
-		c.Check(data.Message, gc.Equals, source.Message)
-		// Key is zero because there is no yaml serialization directive, and Key != ID.
-		c.Check(data.Key, gc.Equals, 0)
-		atomic.AddInt32(&count, 1)
-	})
-	c.Assert(err, jc.ErrorIsNil)
-	_, err = hub.Subscribe(topic, func(topic pubsub.Topic, data map[string]interface{}, err error) {
+	_, err := hub.Subscribe(topic, func(topic pubsub.Topic, data map[string]interface{}, err error) {
 		c.Check(err, jc.ErrorIsNil)
 		c.Check(topic, gc.Equals, topic)
 		c.Check(data, jc.DeepEquals, map[string]interface{}{
@@ -210,7 +199,7 @@ func (*StructuredHubSuite) TestYAMLMarshalling(c *gc.C) {
 			"message": "hello world",
 			"id":      42, // yaml serializes integers just fine.
 		})
-		atomic.AddInt32(&count, 1)
+		called = true
 	})
 	c.Assert(err, jc.ErrorIsNil)
 	result, err := hub.Publish(topic, source)
@@ -222,7 +211,7 @@ func (*StructuredHubSuite) TestYAMLMarshalling(c *gc.C) {
 		c.Fatal("publish did not complete")
 	}
 	// Make sure they were all called.
-	c.Assert(count, gc.Equals, int32(3))
+	c.Assert(called, jc.IsTrue)
 }
 
 func (*StructuredHubSuite) TestAnnotations(c *gc.C) {

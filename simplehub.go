@@ -16,6 +16,10 @@ import (
 // This data is passed through to each Subscriber. Note that all subscribers
 // are notified in parallel, and that no modification should be done to the
 // data or data races will occur.
+//
+// All handler functions passed into Subscribe methods of a SimpleHub should
+// be `func(Topic, interface{})`. The topic of the published method is the first
+// parameter, and the published data is the seconnd parameter.
 func NewSimpleHub() Hub {
 	return &simplehub{
 		logger: loggo.GetLogger("pubsub.simple"),
