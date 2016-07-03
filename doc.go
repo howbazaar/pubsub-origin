@@ -1,7 +1,7 @@
 // Copyright 2016 Canonical Ltd.
 // Licensed under the LGPLv3, see LICENCE file for details.
 
-// Package pubsub provides publish and subscribe functionality.
+// Package pubsub provides publish and subscribe functionality within a single process.
 //
 // The core aspect of the pubsub package is the `Hub`. The hub just provides
 // two methods:

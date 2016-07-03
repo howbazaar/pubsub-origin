@@ -71,13 +71,19 @@ func toHanderType(marshaller Marshaller, rt reflect.Type, data map[string]interf
 // a Topic, a structure, and an error. Returns the reflect.Type for the
 // structure.
 func checkStructuredHandler(handler interface{}) (reflect.Type, error) {
+	if handler == nil {
+		return nil, errors.NotValidf("nil handler")
+	}
 	mapType := reflect.TypeOf(map[string]interface{}{})
 	t := reflect.TypeOf(handler)
 	if t.Kind() != reflect.Func {
 		return nil, errors.NotValidf("handler of type %T", handler)
 	}
-	if t.NumIn() != 3 || t.NumOut() != 0 {
-		return nil, errors.NotValidf("incorrect handler signature")
+	if t.NumIn() != 3 {
+		return nil, errors.NotValidf("expected 3 args, got %d, incorrect handler signature", t.NumIn())
+	}
+	if t.NumOut() != 0 {
+		return nil, errors.NotValidf("expected no return values, got %d, incorrect handler signature", t.NumOut())
 	}
 	var topic Topic
 	var topicType = reflect.TypeOf(topic)
@@ -86,13 +92,13 @@ func checkStructuredHandler(handler interface{}) (reflect.Type, error) {
 	arg2 := t.In(1)
 	arg3 := t.In(2)
 	if arg1 != topicType {
-		return nil, errors.NotValidf("incorrect handler signature, first arg should be a pubsub.Topic")
+		return nil, errors.NotValidf("first arg should be a pubsub.Topic, incorrect handler signature")
 	}
 	if arg2.Kind() != reflect.Struct && arg2 != mapType {
-		return nil, errors.NotValidf("incorrect handler signature, second arg should be a structure for data")
+		return nil, errors.NotValidf("second arg should be a structure for data, incorrect handler signature")
 	}
 	if arg3.Kind() != reflect.Interface || arg3.Name() != "error" {
-		return nil, errors.NotValidf("incorrect handler signature, third arg should be error for deserialization errors")
+		return nil, errors.NotValidf("third arg should be error for deserialization errors, incorrect handler signature")
 	}
 	return arg2, nil
 }

@@ -40,6 +40,62 @@ type BadID struct {
 	ID string `json:"id"`
 }
 
+func (*StructuredHubSuite) TestSubscribeHandler(c *gc.C) {
+	hub := pubsub.NewStructuredHub(nil)
+	for i, test := range []struct {
+		description string
+		handler     interface{}
+		err         string
+	}{
+		{
+			description: "nil handler",
+			err:         "nil handler not valid",
+		}, {
+			description: "string handler",
+			handler:     "a string",
+			err:         "handler of type string not valid",
+		}, {
+			description: "simple hub handler function",
+			handler:     func(pubsub.Topic, interface{}) {},
+			err:         "expected 3 args, got 2, incorrect handler signature not valid",
+		}, {
+			description: "bad return values in handler function",
+			handler:     func(pubsub.Topic, interface{}, error) error { return nil },
+			err:         "expected no return values, got 1, incorrect handler signature not valid",
+		}, {
+			description: "bad first arg",
+			handler:     func(string, map[string]interface{}, error) {},
+			err:         "first arg should be a pubsub.Topic, incorrect handler signature not valid",
+		}, {
+			description: "bad second arg",
+			handler:     func(pubsub.Topic, string, error) {},
+			err:         "second arg should be a structure for data, incorrect handler signature not valid",
+		}, {
+			description: "bad third arg",
+			handler:     func(pubsub.Topic, map[string]interface{}, bool) {},
+			err:         "third arg should be error for deserialization errors, incorrect handler signature not valid",
+		}, {
+			description: "accept map[string]interface{}",
+			handler:     func(pubsub.Topic, map[string]interface{}, error) {},
+		}, {
+			description: "bad map[string]string",
+			handler:     func(pubsub.Topic, map[string]string, error) {},
+			err:         "second arg should be a structure for data, incorrect handler signature not valid",
+		}, {
+			description: "accept struct value",
+			handler:     func(pubsub.Topic, Emitter, error) {},
+		},
+	} {
+		c.Logf("test %d: %s", i, test.description)
+		_, err := hub.Subscribe(pubsub.MatchAll, test.handler)
+		if test.err == "" {
+			c.Check(err, jc.ErrorIsNil)
+		} else {
+			c.Check(err, gc.ErrorMatches, test.err)
+		}
+	}
+}
+
 func (*StructuredHubSuite) TestPublishDeserialize(c *gc.C) {
 	source := Emitter{
 		Origin:  "test",
