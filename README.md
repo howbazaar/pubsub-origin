@@ -2,7 +2,7 @@
 # pubsub
     import "github.com/juju/pubsub"
 
-Package pubsub provides publish and subscribe functionality.
+Package pubsub provides publish and subscribe functionality within a single process.
 
 The core aspect of the pubsub package is the `Hub`. The hub just provides
 two methods:
