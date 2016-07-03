@@ -35,6 +35,11 @@ type multiplexer struct {
 // Unsubscribing the multiplexer stops calls for all handlers added.
 // Only structured hubs support multiplexer.
 func NewMultiplexer(hub Hub) (Unsubscriber, Multiplexer, error) {
+	if hub == nil {
+		return nil, nil, errors.NotValidf("nil hub")
+	}
+	// TODO: make the multiplexer work with a simple hub too.
+	// Not needed initially, but it would be nice if it just worked.
 	shub, ok := hub.(*structuredHub)
 	if !ok {
 		return nil, nil, errors.New("hub was not a StructuredHub")
