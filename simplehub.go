@@ -41,15 +41,6 @@ func (d *doneHandle) Complete() <-chan struct{} {
 	return d.done
 }
 
-func (h *simplehub) dupeSubscribers() []*subscriber {
-	h.mutex.Lock()
-	defer h.mutex.Unlock()
-
-	dupe := make([]*subscriber, len(h.subscribers))
-	copy(dupe, h.subscribers)
-	return dupe
-}
-
 func (h *simplehub) Publish(topic Topic, data interface{}) (Completer, error) {
 	h.mutex.Lock()
 	defer h.mutex.Unlock()
