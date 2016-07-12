@@ -4,6 +4,8 @@
 package pubsub_test
 
 import (
+	"time"
+
 	"github.com/juju/testing"
 	jc "github.com/juju/testing/checkers"
 	gc "gopkg.in/check.v1"
@@ -106,11 +108,67 @@ func (*MultiplexerHubSuite) TestMatcher(c *gc.C) {
 	defer sub.Unsubscribe()
 
 	noopFunc := func(pubsub.Topic, map[string]interface{}, error) {}
-	multi.Add(first, noopFunc)
-	multi.Add(pubsub.MatchRegex("second.*"), noopFunc)
+	err = multi.Add(first, noopFunc)
+	c.Assert(err, jc.ErrorIsNil)
+	err = multi.Add(pubsub.MatchRegex("second.*"), noopFunc)
+	c.Assert(err, jc.ErrorIsNil)
 
 	c.Check(multi.Match(first), jc.IsTrue)
 	c.Check(multi.Match(firstdot), jc.IsFalse)
 	c.Check(multi.Match(second), jc.IsTrue)
 	c.Check(multi.Match(space), jc.IsFalse)
+}
+
+func (*MultiplexerHubSuite) TestCallback(c *gc.C) {
+	source := Emitter{
+		Origin:  "test",
+		Message: "hello world",
+		ID:      42,
+	}
+	var (
+		topic         pubsub.Topic = "callback.topic"
+		originCalled  bool
+		messageCalled bool
+		mapCalled     bool
+	)
+	hub := pubsub.NewStructuredHub(nil)
+	sub, multi, err := pubsub.NewMultiplexer(hub)
+	c.Assert(err, jc.ErrorIsNil)
+	defer sub.Unsubscribe()
+
+	err = multi.Add(topic, func(top pubsub.Topic, data JustOrigin, err error) {
+		c.Check(err, jc.ErrorIsNil)
+		c.Check(top, gc.Equals, topic)
+		c.Check(data.Origin, gc.Equals, source.Origin)
+		originCalled = true
+	})
+	c.Assert(err, jc.ErrorIsNil)
+	err = multi.Add(second, func(topic pubsub.Topic, data MessageID, err error) {
+		c.Fail()
+		messageCalled = true
+	})
+	c.Assert(err, jc.ErrorIsNil)
+	err = multi.Add(pubsub.MatchAll, func(top pubsub.Topic, data map[string]interface{}, err error) {
+		c.Check(err, jc.ErrorIsNil)
+		c.Check(top, gc.Equals, topic)
+		c.Check(data, jc.DeepEquals, map[string]interface{}{
+			"origin":  "test",
+			"message": "hello world",
+			"id":      float64(42), // ints are converted to floats through json.
+		})
+		mapCalled = true
+	})
+	c.Assert(err, jc.ErrorIsNil)
+	result, err := hub.Publish(topic, source)
+	c.Assert(err, jc.ErrorIsNil)
+
+	select {
+	case <-result.Complete():
+	case <-time.After(veryShortTime):
+		c.Fatal("publish did not complete")
+	}
+	c.Check(originCalled, jc.IsTrue)
+	c.Check(messageCalled, jc.IsFalse)
+	c.Check(mapCalled, jc.IsTrue)
+
 }
