@@ -98,3 +98,19 @@ func (*MultiplexerHubSuite) TestMultiplexerAdd(c *gc.C) {
 		}
 	}
 }
+
+func (*MultiplexerHubSuite) TestMatcher(c *gc.C) {
+	hub := pubsub.NewStructuredHub(nil)
+	sub, multi, err := pubsub.NewMultiplexer(hub)
+	c.Assert(err, jc.ErrorIsNil)
+	defer sub.Unsubscribe()
+
+	noopFunc := func(pubsub.Topic, map[string]interface{}, error) {}
+	multi.Add(first, noopFunc)
+	multi.Add(pubsub.MatchRegex("second.*"), noopFunc)
+
+	c.Check(multi.Match(first), jc.IsTrue)
+	c.Check(multi.Match(firstdot), jc.IsFalse)
+	c.Check(multi.Match(second), jc.IsTrue)
+	c.Check(multi.Match(space), jc.IsFalse)
+}
