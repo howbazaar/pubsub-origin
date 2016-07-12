@@ -4,6 +4,7 @@
 package pubsub_test
 
 import (
+	"errors"
 	"sync"
 	"time"
 
@@ -329,6 +330,42 @@ func (*StructuredHubSuite) TestAnnotations(c *gc.C) {
 		c.Fatal("publish did not complete")
 	}
 	c.Assert(obtained, jc.DeepEquals, []string{origin, "other"})
+}
+
+func (*StructuredHubSuite) TestPostProcess(c *gc.C) {
+	counter := 0
+	values := []int{}
+	hub := pubsub.NewStructuredHub(
+		&pubsub.StructuredHubConfig{
+			PostProcess: func(in map[string]interface{}) (map[string]interface{}, error) {
+				counter++
+				if counter == 1 {
+					return nil, errors.New("bad")
+				}
+				in["counter"] = counter
+				return in, nil
+			},
+		})
+	unsub, err := hub.Subscribe(topic, func(t pubsub.Topic, data map[string]interface{}, err error) {
+		c.Check(err, jc.ErrorIsNil)
+		values = append(values, data["counter"].(int))
+	})
+	defer unsub.Unsubscribe()
+
+	_, err = hub.Publish(topic, JustOrigin{"origin"})
+	c.Assert(err, gc.ErrorMatches, "bad")
+	_, err = hub.Publish(topic, JustOrigin{"origin"})
+	c.Assert(err, jc.ErrorIsNil)
+	result, err := hub.Publish(topic, JustOrigin{"origin"})
+	c.Assert(err, jc.ErrorIsNil)
+
+	select {
+	case <-result.Complete():
+	case <-time.After(veryShortTime):
+		c.Fatal("publish did not complete")
+	}
+
+	c.Check(values, jc.DeepEquals, []int{2, 3})
 }
 
 type Worker struct {
