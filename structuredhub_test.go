@@ -98,6 +98,13 @@ func (*StructuredHubSuite) TestSubscribeHandler(c *gc.C) {
 	}
 }
 
+func (*StructuredHubSuite) TestBadPublish(c *gc.C) {
+	hub := pubsub.NewStructuredHub(nil)
+	completer, err := hub.Publish(first, "hello")
+	c.Check(completer, gc.IsNil)
+	c.Check(err, gc.ErrorMatches, "unmarshalling: json: cannot unmarshal string into Go value of type map\\[string\\]interface {}")
+}
+
 func (*StructuredHubSuite) TestPublishDeserialize(c *gc.C) {
 	source := Emitter{
 		Origin:  "test",
