@@ -6,15 +6,15 @@ package pubsub_test
 import (
 	"time"
 
-	gc "gopkg.in/check.v1"
 	jc "github.com/juju/testing/checkers"
+	gc "gopkg.in/check.v1"
 
 	"github.com/juju/pubsub"
 )
 
 var _ = gc.Suite(&BenchmarkSuite{})
 
-type BenchmarkSuite struct { }
+type BenchmarkSuite struct{}
 
 func (*BenchmarkSuite) BenchmarkPublishAndWaitNoSubscribers(c *gc.C) {
 	hub := pubsub.NewSimpleHub()
@@ -26,7 +26,7 @@ func (*BenchmarkSuite) BenchmarkPublishAndWaitNoSubscribers(c *gc.C) {
 
 		select {
 		case <-result.Complete():
-		case <-time.After(veryShortTime):
+		case <-time.After(5 * veryShortTime):
 			failedCount++
 		}
 	}
@@ -48,7 +48,7 @@ func (*BenchmarkSuite) BenchmarkPublishAndWaitOneSubscriber(c *gc.C) {
 
 		select {
 		case <-result.Complete():
-		case <-time.After(veryShortTime):
+		case <-time.After(5 * veryShortTime):
 			failedCount++
 		}
 	}
