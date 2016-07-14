@@ -16,7 +16,7 @@ var _ = gc.Suite(&BenchmarkSuite{})
 
 type BenchmarkSuite struct{}
 
-func (*BenchmarkSuite) BenchmarkPublishAndWaitNoSubscribers(c *gc.C) {
+func (*BenchmarkSuite) BenchmarkSimplePublishAndWaitNoSubscribers(c *gc.C) {
 	hub := pubsub.NewSimpleHub()
 	topic := pubsub.Topic("benchmarking")
 	failedCount := 0
@@ -34,7 +34,7 @@ func (*BenchmarkSuite) BenchmarkPublishAndWaitNoSubscribers(c *gc.C) {
 	c.Assert(failedCount, gc.Equals, 0)
 }
 
-func (*BenchmarkSuite) BenchmarkPublishAndWaitOneSubscriber(c *gc.C) {
+func (*BenchmarkSuite) BenchmarkSimplePublishAndWaitOneSubscriber(c *gc.C) {
 	hub := pubsub.NewSimpleHub()
 	topic := pubsub.Topic("benchmarking")
 	counter := 0
@@ -57,7 +57,7 @@ func (*BenchmarkSuite) BenchmarkPublishAndWaitOneSubscriber(c *gc.C) {
 	c.Check(counter, gc.Equals, c.N)
 }
 
-func (*BenchmarkSuite) BenchmarkPublishAndWaitManySubscribers(c *gc.C) {
+func (*BenchmarkSuite) BenchmarkSimplePublishAndWaitManySubscribers(c *gc.C) {
 	hub := pubsub.NewSimpleHub()
 	topic := pubsub.Topic("benchmarking")
 	const numSubs = 100
@@ -80,6 +80,49 @@ func (*BenchmarkSuite) BenchmarkPublishAndWaitManySubscribers(c *gc.C) {
 		}
 	}
 	// XXX: on my VM, this fails about half the time.
+	c.Check(failedCount, gc.Equals, 0)
+	total := 0
+	for i := 0; i < numSubs; i++ {
+		c.Check(counters[i], gc.Equals, c.N,
+			gc.Commentf("wrong counter amount %d != %d for %d", counters[i], c.N, i))
+		total += counters[i]
+	}
+	c.Check(total, gc.Equals, c.N*numSubs)
+}
+
+func (*BenchmarkSuite) BenchmarkPublishAndWaitMultiplexedSubscribers(c *gc.C) {
+	source := Emitter{
+		Origin:  "test",
+		Message: "hello world",
+		ID:      42,
+	}
+	hub := pubsub.NewStructuredHub(nil)
+	sub, multi, err := pubsub.NewMultiplexer(hub)
+	c.Assert(err, jc.ErrorIsNil)
+	defer sub.Unsubscribe()
+	topic := pubsub.Topic("benchmarking")
+	const numSubs = 10
+	counters := make([]int, numSubs)
+	for i := 0; i < numSubs; i++ {
+		mycounter := i
+		err := multi.Add(pubsub.MatchAll, func(topic pubsub.Topic, s Emitter, err error) {
+			counters[mycounter]++
+		})
+		c.Assert(err, jc.ErrorIsNil)
+	}
+	failedCount := 0
+	for i := 0; i < c.N; i++ {
+		// Publishing nil results in a nil-pointer dereference
+		result, err := hub.Publish(topic, source)
+		c.Assert(err, jc.ErrorIsNil)
+
+		select {
+		case <-result.Complete():
+		case <-time.After(5 * veryShortTime):
+			failedCount++
+		}
+	}
+	// XXX: on my machine, this fails about half the time if I use the same 1ms
 	c.Check(failedCount, gc.Equals, 0)
 	total := 0
 	for i := 0; i < numSubs; i++ {
