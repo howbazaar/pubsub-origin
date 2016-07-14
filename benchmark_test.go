@@ -165,6 +165,39 @@ func (*BenchmarkSuite) BenchmarkStructuredPublishAndWaitManySubscribers(c *gc.C)
 	c.Check(total, gc.Equals, c.N*numSubscribers)
 }
 
+func (*BenchmarkSuite) BenchmarkPublishAndWaitMultiplexedOneSubscriber(c *gc.C) {
+	source := Emitter{
+		Origin:  "test",
+		Message: "hello world",
+		ID:      42,
+	}
+	hub := pubsub.NewStructuredHub(nil)
+	sub, multi, err := pubsub.NewMultiplexer(hub)
+	c.Assert(err, jc.ErrorIsNil)
+	defer sub.Unsubscribe()
+	topic := pubsub.Topic("benchmarking")
+	counter := 0
+	err = multi.Add(pubsub.MatchAll, func(topic pubsub.Topic, s Emitter, err error) {
+		counter++
+	})
+	c.Assert(err, jc.ErrorIsNil)
+	failedCount := 0
+	for i := 0; i < c.N; i++ {
+		// Publishing nil results in a nil-pointer dereference
+		result, err := hub.Publish(topic, source)
+		c.Assert(err, jc.ErrorIsNil)
+
+		select {
+		case <-result.Complete():
+		case <-time.After(5 * veryShortTime):
+			failedCount++
+		}
+	}
+	// XXX: on my machine, this fails about half the time if I use the same 1ms
+	c.Check(failedCount, gc.Equals, 0)
+	c.Check(counter, gc.Equals, c.N)
+}
+
 func (*BenchmarkSuite) BenchmarkPublishAndWaitMultiplexedSubscribers(c *gc.C) {
 	source := Emitter{
 		Origin:  "test",
